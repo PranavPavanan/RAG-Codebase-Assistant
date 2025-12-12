@@ -17,7 +17,7 @@
 #### 3. Code Chunking Strategy
 - **Chunk Size**: 1000 characters per chunk (configurable via `CHUNK_SIZE` env var)
 - **Overlap**: 200 characters overlap between chunks for context continuity
-- **Smart Splitting**: Using semantic splitters from langchain-text-splitters
+- **Smart Splitting**: Custom code-aware chunking that preserves functions and classes
 
 #### 4. Caching Strategy
 - **Conversation Cache**: Previous messages stored in memory to avoid re-processing

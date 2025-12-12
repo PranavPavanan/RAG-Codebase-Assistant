@@ -7,7 +7,6 @@ faiss-cpu==1.11.0
 rank-bm25==0.2.2
 sentence-transformers==2.2.2
 llama-cpp-python==0.3.12
-langchain-text-splitters==0.0.1
 pydantic==2.9.0
 python-dotenv==1.0.0
 aiofiles==23.2.1
