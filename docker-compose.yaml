@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  # Service 1: The Python Backend
+  backend:
+    build: ./backend  # Build the Dockerfile in the backend folder
+    container_name: rag-backend
+    ports:
+      - "8000:8000"   # Map localhost:8000 to container:8000
+    volumes:
+      # Persist data! If we delete the container, we don't want to lose the index.
+      # This maps your local 'storage' folder to the container's storage.
+      - ./backend/storage:/app/storage
+      - ./backend/models:/app/models
+    environment:
+      - CHUNK_SIZE=1000
+    # Restart automatically if it crashes
+    restart: unless-stopped
+
+  # Service 2: The Frontend Web Server
+  frontend:
+    build: ./frontend # Build the Dockerfile in the frontend folder
+    container_name: rag-frontend
+    ports:
+      - "3000:80"     # Map localhost:3000 to container port 80 (Nginx)
+    depends_on:
+      - backend       # Wait for backend to start before starting frontend
