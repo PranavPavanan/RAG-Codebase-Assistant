@@ -37,11 +37,21 @@ An AI-powered tool for querying and understanding GitHub repository code using R
 
 ## Quick Start 🚀
 
-### 1. Clone the Repository
+### 1. Setup from GitHub
+
+Clone this repository from GitHub (HTTPS or SSH):
 
 ```bash
-git clone https://github.com/PranavPavanan/codingAssist.git
+git clone https://github.com/PranavPavanan/coding-assistant.git
+# or
+# git clone git@github.com:PranavPavanan/coding-assistant.git
 cd coding-assistant
+```
+
+If you plan to contribute, create your feature branch now:
+
+```bash
+git checkout -b feature/your-feature-name
 ```
 
 ### 2. Backend Setup
@@ -62,7 +72,8 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Create .env file (optional)
-cp .env.example .env
+copy .env.example .env   # Windows (PowerShell/CMD)
+# cp .env.example .env   # Mac/Linux
 # Edit .env and add your GitHub token if you have one
 
 # Download CodeLlama model
@@ -86,7 +97,8 @@ cd frontend
 npm install
 
 # Create .env file
-cp .env.example .env
+copy .env.example .env   # Windows (PowerShell/CMD)
+# cp .env.example .env   # Mac/Linux
 # Default values should work for local development
 
 # Run frontend
