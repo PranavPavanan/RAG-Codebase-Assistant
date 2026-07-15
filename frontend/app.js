@@ -17,7 +17,10 @@ class ApiClient {
     return res.json();
   }
   health() { return this.req('/health'); }
-  searchRepositories(query, language, minStars) { return this.req('/search/repositories', { method: 'POST', body: JSON.stringify({ query, language, min_stars: minStars }) }); }
+  searchRepositories(query, username) { return this.req('/search/repositories', { method: 'POST', body: JSON.stringify({ query, username }) }); }
+  searchTrendingRepositories(keyword, language, topic, minStars) {
+      return this.req('/search/trending', { method: 'POST', body: JSON.stringify({ keyword: keyword || null, language: language || null, topic: topic || null, min_stars: minStars ? parseInt(minStars, 10) : 1000 }) });
+  }
   startIndexing(repository_url, branch) { return this.req('/index/start', { method: 'POST', body: JSON.stringify({ repository_url, branch }) }); }
   indexStatus(taskId) { return this.req(`/index/status/${taskId}`); }
   indexStats() { return this.req('/index/stats'); }
@@ -53,6 +56,7 @@ class RAGApp {
     this.ensureToastContainer();
     this.initTheme();
     this.bindNav();
+    this.bindSearchModes();
     this.bindEvents();
     this.bindWelcomeChips();
     this.bindMobileSidebar();
@@ -178,15 +182,33 @@ class RAGApp {
     }
   }
 
+  // ── Search Modes ──────────────────────────────────────────
+  bindSearchModes() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        // Toggle active button
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+
+        // Toggle form visibility
+        const mode = e.currentTarget.dataset.mode;
+        document.getElementById('search-form-specific').classList.toggle('hidden', mode !== 'specific');
+        document.getElementById('search-form-trending').classList.toggle('hidden', mode !== 'trending');
+        this.hideError('search-error');
+      });
+    });
+  }
+
   // ── Search ────────────────────────────────────────────────
-  async handleSearch() {
+  async handleSearchSpecific() {
     const q = document.getElementById('search-query').value.trim();
-    if (!q) return this.showError('search-error', 'Please enter a search query');
+    const u = document.getElementById('search-username').value.trim();
+    if (!q && !u) return this.showError('search-error', 'Please enter a repository name or username');
     this.hideError('search-error');
     this.state.isSearching = true;
-    this.setLoading('search-btn', true, 'Searching...');
+    this.setLoading('search-btn-specific', true, 'Searching...');
     try {
-      const res = await this.api.searchRepositories(q);
+      const res = await this.api.searchRepositories(q, u);
       this.state.searchResults = res.repositories || [];
       this.displaySearchResults();
       if (this.state.searchResults.length === 0) this.showError('search-error', 'No repositories found');
@@ -194,7 +216,29 @@ class RAGApp {
       this.showError('search-error', e.message || 'Failed to search repositories');
       this.state.searchResults = [];
     } finally {
-      this.state.isSearching = false; this.setLoading('search-btn', false);
+      this.state.isSearching = false; this.setLoading('search-btn-specific', false);
+    }
+  }
+
+  async handleSearchTrending() {
+    const k = document.getElementById('trending-keyword').value.trim();
+    const l = document.getElementById('trending-language').value.trim();
+    const t = document.getElementById('trending-topic').value.trim();
+    const s = document.getElementById('trending-stars').value.trim();
+    
+    this.hideError('search-error');
+    this.state.isSearching = true;
+    this.setLoading('search-btn-trending', true, 'Searching...');
+    try {
+      const res = await this.api.searchTrendingRepositories(k, l, t, s);
+      this.state.searchResults = res.repositories || [];
+      this.displaySearchResults();
+      if (this.state.searchResults.length === 0) this.showError('search-error', 'No trending repositories found');
+    } catch (e) {
+      this.showError('search-error', e.message || 'Failed to search trending repositories');
+      this.state.searchResults = [];
+    } finally {
+      this.state.isSearching = false; this.setLoading('search-btn-trending', false);
     }
   }
 
@@ -742,7 +786,8 @@ class RAGApp {
   // ── Events ────────────────────────────────────────────────
   bindEvents() {
     document.getElementById('theme-toggle')?.addEventListener('click', () => this.toggleTheme());
-    document.getElementById('search-form')?.addEventListener('submit', (e) => { e.preventDefault(); this.handleSearch(); });
+    document.getElementById('search-form-specific')?.addEventListener('submit', (e) => { e.preventDefault(); this.handleSearchSpecific(); });
+    document.getElementById('search-form-trending')?.addEventListener('submit', (e) => { e.preventDefault(); this.handleSearchTrending(); });
     document.getElementById('clear-selection')?.addEventListener('click', () => this.clearSelection());
     document.getElementById('start-indexing')?.addEventListener('click', () => this.handleStartIndexing());
     document.getElementById('clear-index')?.addEventListener('click', () => this.handleClearIndex());

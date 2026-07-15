@@ -12,7 +12,7 @@ class IndexingStatus(str, Enum):
 
 class IndexStartRequest(BaseModel):
     repository_url: str
-    branch: str = "main"
+    branch: Optional[str] = None
 
 class IndexStartResponse(BaseModel):
     task_id: str
@@ -34,7 +34,7 @@ class IndexStatusResponse(BaseModel):
     progress: IndexProgressInfo
     percentage: float
     repository_url: str
-    started_at: datetime
+    started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error: Optional[str] = None
     result: Optional[dict] = None

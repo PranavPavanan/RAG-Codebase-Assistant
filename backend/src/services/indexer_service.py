@@ -9,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 import time
+import os
+import stat
 
 from src.models.index import (
     FileIndexEntry,
@@ -75,19 +77,14 @@ class IndexerService:
             "task_id": task_id,
             "status": IndexingStatus.PENDING,
             "repository_url": request.repository_url,
-            "branch": request.branch or "main",
+            "branch": request.branch,
             "created_at": datetime.utcnow(),
             "started_at": None,
             "completed_at": None,
             "progress": IndexProgressInfo(
-                current_file=None,
                 files_processed=0,
                 total_files=0,
                 percentage=0.0,
-                progress=None,
-                bytes_processed=0,
-                elapsed_time=None,
-                estimated_remaining=None,
             ),
             "error": None,
             "result": None,
@@ -285,11 +282,11 @@ class IndexerService:
 
             # Step 1: Clone repository
             await self._update_progress(task_id, "Cloning repository...", 0, 0, 0)
-            repo_path = await self._clone_repository(request.repository_url, request.branch or "main")
+            repo_path = await self._clone_repository(request.repository_url, request.branch)
             
             # Step 2: Discover files
             await self._update_progress(task_id, "Discovering files...", 0, 0, 5)
-            files_to_process = self._discover_files(repo_path, request.include_patterns, request.exclude_patterns)
+            files_to_process = self._discover_files(repo_path, [], [])
             
             # Update total files count
             task["progress"].total_files = len(files_to_process)
@@ -303,7 +300,6 @@ class IndexerService:
             for i, file_path in enumerate(files_to_process):
                 # Update current file being processed
                 relative_path = str(file_path.relative_to(repo_path))
-                task["progress"].current_file = relative_path
                 
                 # Skip if file already processed (deduplication)
                 if relative_path in processed_file_paths:
@@ -319,16 +315,10 @@ class IndexerService:
                 # Update progress
                 progress_percentage = 10 + (i + 1) / len(files_to_process) * 80  # 10-90% for file processing
                 task["progress"].files_processed = i + 1
-                task["progress"].bytes_processed = total_bytes
                 task["progress"].percentage = progress_percentage
                 
-                # Calculate elapsed time and estimated remaining
+                # Calculate elapsed time and estimated remaining for internal tracking
                 elapsed = time.time() - start_time
-                if i > 0:  # Avoid division by zero
-                    estimated_total = elapsed * len(files_to_process) / (i + 1)
-                    estimated_remaining = max(0, estimated_total - elapsed)
-                    task["progress"].elapsed_time = elapsed
-                    task["progress"].estimated_remaining = estimated_remaining
                 
                 await self._update_progress(
                     task_id, 
@@ -371,7 +361,7 @@ class IndexerService:
             task["progress"].total_files = total_files
             task["progress"].percentage = percentage
 
-    async def _clone_repository(self, repo_url: str, branch: str) -> Path:
+    async def _clone_repository(self, repo_url: str, branch: Optional[str]) -> Path:
         """Clone repository to local storage."""
         # Extract repo name from URL
         repo_name = repo_url.split("/")[-1].replace(".git", "")
@@ -379,17 +369,27 @@ class IndexerService:
         
         # Remove existing directory if it exists
         if repo_path.exists():
-            shutil.rmtree(repo_path)
+            def remove_readonly(func, path, _):
+                # Set the file to writable and retry the operation
+                os.chmod(path, stat.S_IWRITE)
+                func(path)
+                
+            shutil.rmtree(repo_path, onerror=remove_readonly)
         
         # Clone repository
         try:
-            subprocess.run([
+            clone_cmd = [
                 "git", "clone", 
-                "--depth", "1", 
-                "--branch", branch,
-                repo_url, 
-                str(repo_path)
-            ], check=True, capture_output=True)
+                "--depth", "1"
+            ]
+            
+            # Let git natively fetch the repository's default branch if none is provided.
+            if branch:
+                clone_cmd.extend(["--branch", branch])
+                
+            clone_cmd.extend([repo_url, str(repo_path)])
+            
+            subprocess.run(clone_cmd, check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to clone repository: {e.stderr.decode()}")
         

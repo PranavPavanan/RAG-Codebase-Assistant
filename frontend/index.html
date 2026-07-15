@@ -96,23 +96,62 @@
                             </div>
                         </div>
                         <div class="card-body">
-                            <form id="search-form" class="search-form">
-                                <div class="search-input-group">
-                                    <i data-lucide="search" class="search-icon"></i>
-                                    <input
-                                        type="text"
-                                        id="search-query"
-                                        placeholder="Search repositories — e.g. 'react hooks', 'fastapi', 'python orm'"
-                                        class="search-input"
-                                        autocomplete="off"
-                                    >
+                            <!-- Search Mode Toggle -->
+                            <div class="search-mode-toggle">
+                                <button type="button" class="mode-btn active" data-mode="specific">Find Repository</button>
+                                <button type="button" class="mode-btn" data-mode="trending">Trending Repos</button>
+                            </div>
+
+                            <!-- Specific Repo Form -->
+                            <form id="search-form-specific" class="search-form">
+                                <div class="form-grid">
+                                    <div class="input-group-vertical">
+                                        <label for="search-query" class="input-label">Repository Name or URL</label>
+                                        <div class="search-input-group">
+                                            <i data-lucide="search" class="search-icon"></i>
+                                            <input type="text" id="search-query" placeholder="e.g. Sticker-Shop or https://github.com/..." class="search-input" autocomplete="off">
+                                        </div>
+                                    </div>
+                                    <div class="input-group-vertical">
+                                        <label for="search-username" class="input-label">Username (Optional)</label>
+                                        <div class="search-input-group">
+                                            <i data-lucide="user" class="search-icon"></i>
+                                            <input type="text" id="search-username" placeholder="e.g. PranavPavanan" class="search-input" autocomplete="off">
+                                        </div>
+                                    </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary" id="search-btn">
-                                    <span class="btn-text">Search</span>
+                                <button type="submit" class="btn btn-primary" id="search-btn-specific" style="margin-top: 1rem;">
+                                    <span class="btn-text">Find</span>
                                     <i data-lucide="loader-2" class="btn-spinner hidden"></i>
                                 </button>
                             </form>
-                            <div id="search-error" class="error-message hidden"></div>
+
+                            <!-- Trending Repo Form -->
+                            <form id="search-form-trending" class="search-form hidden">
+                                <div class="form-grid">
+                                    <div class="input-group-vertical">
+                                        <label for="trending-keyword" class="input-label">Keyword (Optional)</label>
+                                        <input type="text" id="trending-keyword" placeholder="e.g. machine learning" class="input" autocomplete="off">
+                                    </div>
+                                    <div class="input-group-vertical">
+                                        <label for="trending-language" class="input-label">Language (Optional)</label>
+                                        <input type="text" id="trending-language" placeholder="e.g. python" class="input" autocomplete="off">
+                                    </div>
+                                    <div class="input-group-vertical">
+                                        <label for="trending-topic" class="input-label">Topic (Optional)</label>
+                                        <input type="text" id="trending-topic" placeholder="e.g. web" class="input" autocomplete="off">
+                                    </div>
+                                    <div class="input-group-vertical">
+                                        <label for="trending-stars" class="input-label">Min Stars</label>
+                                        <input type="number" id="trending-stars" value="1000" class="input" autocomplete="off">
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="search-btn-trending" style="margin-top: 1rem;">
+                                    <span class="btn-text">Search Trending</span>
+                                    <i data-lucide="loader-2" class="btn-spinner hidden"></i>
+                                </button>
+                            </form>
+                            <div id="search-error" class="error-message hidden" style="margin-top: 1rem;"></div>
                         </div>
                     </div>
 
