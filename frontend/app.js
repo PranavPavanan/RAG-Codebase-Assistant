@@ -474,8 +474,8 @@ class RAGApp {
       input.placeholder = `Ask about ${this.state.indexStats?.repository_name || 'the code'}…`;
       submit.disabled = this.state.isQuerying;
 
-      const sendIcon = submit.querySelector('[data-lucide="send"]');
-      const spinIcon = submit.querySelector('[data-lucide="loader-2"]');
+      const sendIcon = submit.querySelector('.send-arrow-icon');
+      const spinIcon = submit.querySelector('.lucide-loader-2, [data-lucide="loader-2"]');
       if (this.state.isQuerying) { sendIcon?.classList.add('hidden'); spinIcon?.classList.remove('hidden'); }
       else { sendIcon?.classList.remove('hidden'); spinIcon?.classList.add('hidden'); }
 
@@ -537,6 +537,7 @@ class RAGApp {
     } finally {
       this.state.isQuerying = false;
       this.stopElapsedTimer();
+      this.displayMessages();
       this.updateChatInterface();
     }
   }

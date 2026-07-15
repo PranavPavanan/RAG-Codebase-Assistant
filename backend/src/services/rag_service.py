@@ -44,17 +44,10 @@ except ImportError:
     logger.warning("llama-cpp-python not available. Install with: pip install llama-cpp-python")
 
 from src.models.query import (
-    ChatContextResponse,
-    ChatHistoryRequest,
-    ChatHistoryResponse,
     ChatMessage,
     QueryRequest,
     QueryResponse,
     SourceReference,
-    SessionInfo,
-    ConversationInfo,
-    SessionClearRequest,
-    SessionClearResponse,
 )
 from src.config import settings
 
@@ -77,10 +70,8 @@ class RAGService:
         self.vector_store_path = vector_store_path
         self.model_path = model_path
 
-        # In-memory session and conversation storage (MVP - should use database in production)
-        self.sessions: dict[str, SessionInfo] = {}  # session_id -> SessionInfo
+        # In-memory conversation storage (MVP - should use database in production)
         self.conversations: dict[str, list[ChatMessage]] = {}  # conversation_id -> messages
-        self.session_conversations: dict[str, set[str]] = {}  # session_id -> set of conversation_ids
         
         # Response cache for common queries
         self.response_cache = {}
@@ -199,30 +190,12 @@ class RAGService:
             logger.debug(f"Cache hit for query: {request.query[:50]}...")
             return cached_response
         
-        # Generate or use provided session ID and conversation ID
-        session_id = request.session_id or str(uuid.uuid4())
+        # Generate or use provided conversation ID
         conversation_id = request.conversation_id or str(uuid.uuid4())
-
-        # Create session if it doesn't exist
-        if session_id not in self.sessions:
-            self.sessions[session_id] = SessionInfo(
-                session_id=session_id,
-                created_at=datetime.utcnow(),
-                last_activity=datetime.utcnow(),
-                conversation_count=0,
-                total_messages=0
-            )
-            self.session_conversations[session_id] = set()
 
         # Create conversation if it doesn't exist
         if conversation_id not in self.conversations:
             self.conversations[conversation_id] = []
-            # Add conversation to session
-            self.session_conversations[session_id].add(conversation_id)
-            self.sessions[session_id].conversation_count += 1
-
-        # Update session activity
-        self.sessions[session_id].last_activity = datetime.utcnow()
 
         # Add user message to conversation history
         user_message = ChatMessage(
@@ -231,7 +204,6 @@ class RAGService:
             timestamp=datetime.utcnow(),
         )
         self.conversations[conversation_id].append(user_message)
-        self.sessions[session_id].total_messages += 1
 
         # Check if model is loaded
         if not self.is_initialized:
@@ -301,7 +273,6 @@ The contextual awareness system is working, but you need a valid model file."""
             sources=sources,
         )
         self.conversations[conversation_id].append(assistant_message)
-        self.sessions[session_id].total_messages += 1
 
         processing_time = time.time() - start_time
 
@@ -310,8 +281,9 @@ The contextual awareness system is working, but you need a valid model file."""
             response=answer,
             sources=sources,
             conversation_id=conversation_id,
-            session_id=session_id,
-            model=model,
+            confidence=1.0,
+            processing_time=processing_time,
+            model_used=model,
         )
         
         # Cache the response (with size limit)
@@ -342,300 +314,7 @@ The contextual awareness system is working, but you need a valid model file."""
         
         return "\n".join(context_parts)
 
-    def get_chat_history(self, request: ChatHistoryRequest) -> Optional[ChatHistoryResponse]:
-        """
-        Get conversation history.
 
-        Args:
-            request: Chat history request with conversation ID
-
-        Returns:
-            ChatHistoryResponse or None if not found
-        """
-        conversation_id = request.conversation_id
-
-        if conversation_id not in self.conversations:
-            return None
-
-        messages = self.conversations[conversation_id]
-
-        # Apply limit if specified
-        if request.limit:
-            messages = messages[-request.limit :]
-
-        return ChatHistoryResponse(
-            conversation_id=conversation_id,
-            messages=messages,
-            total_count=len(self.conversations[conversation_id]),
-        )
-
-    def get_chat_context(self, conversation_id: str) -> Optional[ChatContextResponse]:
-        """
-        Get conversation context summary.
-
-        Args:
-            conversation_id: Conversation identifier
-
-        Returns:
-            ChatContextResponse or None if not found
-        """
-        if conversation_id not in self.conversations:
-            return None
-
-        messages = self.conversations[conversation_id]
-
-        # Count messages by role
-        user_messages = sum(1 for m in messages if m.role == "user")
-        assistant_messages = sum(1 for m in messages if m.role == "assistant")
-
-        # Get last query and response
-        last_user_message = next((m for m in reversed(messages) if m.role == "user"), None)
-        last_assistant_message = next(
-            (m for m in reversed(messages) if m.role == "assistant"), None
-        )
-
-        return ChatContextResponse(
-            conversation_id=conversation_id,
-            message_count=len(messages),
-            user_message_count=user_messages,
-            assistant_message_count=assistant_messages,
-            last_query=last_user_message.content if last_user_message else None,
-            last_response=last_assistant_message.content if last_assistant_message else None,
-            created_at=messages[0].timestamp if messages else datetime.utcnow(),
-            last_updated=messages[-1].timestamp if messages else datetime.utcnow(),
-        )
-
-    def clear_history(self, conversation_id: Optional[str] = None) -> dict:
-        """
-        Clear conversation history.
-
-        Args:
-            conversation_id: Optional specific conversation to clear, or None for all
-
-        Returns:
-            Dictionary with operation result
-        """
-        try:
-            if conversation_id:
-                if conversation_id in self.conversations:
-                    del self.conversations[conversation_id]
-                    return {
-                        "success": True,
-                        "message": f"Conversation {conversation_id} cleared",
-                    }
-                else:
-                    return {
-                        "success": False,
-                        "error": "Conversation not found",
-                    }
-            else:
-                count = len(self.conversations)
-                self.conversations.clear()
-                return {
-                    "success": True,
-                    "message": f"Cleared {count} conversations",
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": str(e),
-            }
-
-    def get_conversation_history(self, conversation_id: str) -> list[ChatMessage]:
-        """
-        Get conversation history for a specific conversation.
-
-        Args:
-            conversation_id: Conversation identifier
-
-        Returns:
-            List of chat messages
-        """
-        return self.conversations.get(conversation_id, [])
-
-    def clear_conversations(self) -> None:
-        """Clear all conversations."""
-        self.conversations.clear()
-        self.sessions.clear()
-        self.session_conversations.clear()
-
-    def clear_session(self, request: SessionClearRequest) -> SessionClearResponse:
-        """
-        Clear session data.
-
-        Args:
-            request: Session clear request
-
-        Returns:
-            SessionClearResponse with operation result
-        """
-        try:
-            sessions_cleared = 0
-            conversations_cleared = 0
-
-            if request.clear_all:
-                # Clear all sessions
-                conversations_cleared = len(self.conversations)
-                sessions_cleared = len(self.sessions)
-                self.conversations.clear()
-                self.sessions.clear()
-                self.session_conversations.clear()
-                
-                return SessionClearResponse(
-                    success=True,
-                    message=f"Cleared all sessions and {conversations_cleared} conversations",
-                    sessions_cleared=sessions_cleared,
-                    conversations_cleared=conversations_cleared
-                )
-            else:
-                # Clear specific session
-                session_id = request.session_id
-                if session_id not in self.sessions:
-                    return SessionClearResponse(
-                        success=False,
-                        message=f"Session {session_id} not found",
-                        sessions_cleared=0,
-                        conversations_cleared=0
-                    )
-
-                # Count conversations to be cleared
-                if session_id in self.session_conversations:
-                    conversations_cleared = len(self.session_conversations[session_id])
-                    # Remove all conversations in this session
-                    for conv_id in self.session_conversations[session_id]:
-                        if conv_id in self.conversations:
-                            del self.conversations[conv_id]
-                    del self.session_conversations[session_id]
-
-                # Remove session
-                del self.sessions[session_id]
-                sessions_cleared = 1
-
-                return SessionClearResponse(
-                    success=True,
-                    message=f"Cleared session {session_id} and {conversations_cleared} conversations",
-                    sessions_cleared=sessions_cleared,
-                    conversations_cleared=conversations_cleared
-                )
-
-        except Exception as e:
-            return SessionClearResponse(
-                success=False,
-                message=f"Failed to clear session: {str(e)}",
-                sessions_cleared=0,
-                conversations_cleared=0
-            )
-
-    def get_session_info(self, session_id: str) -> Optional[SessionInfo]:
-        """
-        Get session information.
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            SessionInfo or None if not found
-        """
-        return self.sessions.get(session_id)
-
-    def get_conversation_info(self, conversation_id: str) -> Optional[ConversationInfo]:
-        """
-        Get conversation information.
-
-        Args:
-            conversation_id: Conversation identifier
-
-        Returns:
-            ConversationInfo or None if not found
-        """
-        if conversation_id not in self.conversations:
-            return None
-
-        messages = self.conversations[conversation_id]
-        
-        # Find the session this conversation belongs to
-        session_id = None
-        for sid, conv_ids in self.session_conversations.items():
-            if conversation_id in conv_ids:
-                session_id = sid
-                break
-
-        if not session_id:
-            return None
-
-        return ConversationInfo(
-            conversation_id=conversation_id,
-            session_id=session_id,
-            created_at=messages[0].timestamp if messages else datetime.utcnow(),
-            last_activity=messages[-1].timestamp if messages else datetime.utcnow(),
-            message_count=len(messages)
-        )
-
-    def list_sessions(self) -> list[SessionInfo]:
-        """
-        List all active sessions.
-
-        Returns:
-            List of SessionInfo objects
-        """
-        return list(self.sessions.values())
-
-    def list_conversations_in_session(self, session_id: str) -> list[ConversationInfo]:
-        """
-        List all conversations in a session.
-
-        Args:
-            session_id: Session identifier
-
-        Returns:
-            List of ConversationInfo objects
-        """
-        if session_id not in self.session_conversations:
-            return []
-
-        conversations = []
-        for conv_id in self.session_conversations[session_id]:
-            conv_info = self.get_conversation_info(conv_id)
-            if conv_info:
-                conversations.append(conv_info)
-
-        return conversations
-
-    def get_conversation_context(self, conversation_id: str) -> Optional[ChatContextResponse]:
-        """
-        Get conversation context summary.
-
-        Args:
-            conversation_id: Conversation identifier
-
-        Returns:
-            ChatContextResponse or None if not found
-        """
-        if conversation_id not in self.conversations:
-            return None
-
-        messages = self.conversations[conversation_id]
-
-        # Count messages by role
-        user_messages = sum(1 for m in messages if m.role == "user")
-        assistant_messages = sum(1 for m in messages if m.role == "assistant")
-
-        # Get last query and response
-        last_user_message = next((m for m in reversed(messages) if m.role == "user"), None)
-        last_assistant_message = next(
-            (m for m in reversed(messages) if m.role == "assistant"), None
-        )
-
-        return ChatContextResponse(
-            conversation_id=conversation_id,
-            message_count=len(messages),
-            user_message_count=user_messages,
-            assistant_message_count=assistant_messages,
-            last_query=last_user_message.content if last_user_message else None,
-            last_response=last_assistant_message.content if last_assistant_message else None,
-            created_at=messages[0].timestamp if messages else datetime.utcnow(),
-            last_updated=messages[-1].timestamp if messages else datetime.utcnow(),
-        )
 
     def semantic_search(self, query: str, top_k: int = 5) -> list[SourceReference]:
         """
@@ -683,11 +362,11 @@ The contextual awareness system is working, but you need a valid model file."""
                 score = max(0.0, min(1.0, float(dist)))
                 
                 sources.append(SourceReference(
-                    file=chunk['file_path'],
+                    file_path=chunk['file_path'],
                     content=chunk['content'],
                     score=score,
-                    line_start=chunk.get('line_start', 1),
-                    line_end=chunk.get('line_end', 1),
+                    start_line=chunk.get('line_start', 1),
+                    end_line=chunk.get('line_end', 1),
                     type=chunk.get('type', 'code')
                 ))
             
@@ -740,11 +419,11 @@ The contextual awareness system is working, but you need a valid model file."""
                 normalized_score = float(scores[idx]) / max_score
                 
                 sources.append(SourceReference(
-                    file=chunk['file_path'],
+                    file_path=chunk['file_path'],
                     content=chunk['content'],
                     score=normalized_score,
-                    line_start=chunk.get('line_start', 1),
-                    line_end=chunk.get('line_end', 1),
+                    start_line=chunk.get('line_start', 1),
+                    end_line=chunk.get('line_end', 1),
                     type=chunk.get('type', 'code')
                 ))
             
@@ -789,7 +468,7 @@ The contextual awareness system is working, but you need a valid model file."""
             
             # Process semantic results
             for rank, src in enumerate(semantic_results):
-                key = f"{src.file}:{src.line_start}"
+                key = f"{src.file_path}:{src.start_line}"
                 rrf_score = semantic_weight * (1.0 / (k_constant + rank + 1))
                 rrf_scores[key] = rrf_scores.get(key, 0) + rrf_score
                 if key not in chunk_map:
@@ -798,7 +477,7 @@ The contextual awareness system is working, but you need a valid model file."""
             # Process keyword results
             keyword_weight = 1.0 - semantic_weight
             for rank, src in enumerate(keyword_results):
-                key = f"{src.file}:{src.line_start}"
+                key = f"{src.file_path}:{src.start_line}"
                 rrf_score = keyword_weight * (1.0 / (k_constant + rank + 1))
                 rrf_scores[key] = rrf_scores.get(key, 0) + rrf_score
                 if key not in chunk_map:
@@ -816,11 +495,11 @@ The contextual awareness system is working, but you need a valid model file."""
                 # Normalize RRF score to 0-1
                 normalized_score = rrf_scores[key] / max_rrf if max_rrf > 0 else 0
                 results.append(SourceReference(
-                    file=src.file,
+                    file_path=src.file_path,
                     content=src.content,
                     score=normalized_score,
-                    line_start=src.line_start,
-                    line_end=src.line_end,
+                    start_line=src.start_line,
+                    end_line=src.end_line,
                     type=src.type
                 ))
             
@@ -862,9 +541,9 @@ The contextual awareness system is working, but you need a valid model file."""
                 else:
                     # Handle SourceReference objects - present more naturally with line info
                     line_info = ""
-                    if src.line_start and src.line_end:
-                        line_info = f" (lines {src.line_start}-{src.line_end})"
-                    code_context += f"\nFrom {src.file}{line_info}:\n{src.content}\n"
+                    if src.start_line and src.end_line:
+                        line_info = f" (lines {src.start_line}-{src.end_line})"
+                    code_context += f"\nFrom {src.file_path}{line_info}:\n{src.content}\n"
         
         # Build instructions
         instructions = """When answering:
@@ -943,10 +622,7 @@ Answer naturally and conversationally about what you observe in the repository.
             generated_text = response["choices"][0]["text"].strip()
             
             # Validate and clean the response
-            generated_text = self._validate_response(generated_text, context)
-            
-            # Fact-check the response against source content
-            generated_text = self._fact_check_response(generated_text, context, query)
+            generated_text = self._validate_response(generated_text)
             
             # Clean up response object to free memory
             del response
@@ -982,381 +658,32 @@ Answer naturally and conversationally about what you observe in the repository.
                 if sources:
                     retrieved_content = []
                     for src in sources:
-                        content_str = f"File: {src.file} (lines {src.line_start}-{src.line_end})\n{src.content}"
+                        content_str = f"File: {src.file_path} (lines {src.start_line}-{src.end_line})\n{src.content}"
                         retrieved_content.append(content_str)
                     
                     logger.info(f"Hybrid retrieval returned {len(sources)} sources")
                     return retrieved_content, sources
                 else:
-                    logger.warning("Hybrid search returned no results, falling back to keyword-based")
-            
-            # Fallback to original keyword-based retrieval
-            return self._keyword_based_retrieval(query)
+                    logger.warning("Hybrid search returned no results")
+                    return [], []
+            else:
+                return [], []
             
         except Exception as e:
             logger.error(f"Error in hybrid retrieval: {e}")
-            # Fall back to keyword-based retrieval
-            return self._keyword_based_retrieval(query)
-    
-    def _keyword_based_retrieval(self, query: str) -> tuple[List[str], List[SourceReference]]:
-        """
-        Fallback keyword-based retrieval using file path and content scoring.
-        
-        Args:
-            query: User query
-            
-        Returns:
-            Tuple of (retrieved_content, sources)
-        """
-        try:
-            # Load the most recent metadata file
-            metadata_dir = Path("./storage/metadata")
-            if not metadata_dir.exists():
-                return [], []
-            
-            # Find the most recent metadata file
-            metadata_files = list(metadata_dir.glob("*.json"))
-            if not metadata_files:
-                return [], []
-            
-            # Sort by modification time and get the most recent
-            latest_metadata = max(metadata_files, key=lambda f: f.stat().st_mtime)
-            
-            # Load metadata
-            with open(latest_metadata, 'r') as f:
-                metadata = json.load(f)
-            
-            files = metadata.get('files', [])
-            if not files:
-                return [], []
-            
-            # Improved keyword-based retrieval with better scoring
-            query_lower = query.lower()
-            query_words = set(query_lower.split())
-            relevant_files = []
-            
-            # Score files based on query keywords
-            for file_info in files:
-                file_path = file_info.get('file_path', '')
-                language = file_info.get('language', '')
-                
-                # Calculate relevance score
-                score = 0
-                
-                # High priority: exact keyword matches in file path
-                for word in query_words:
-                    if word in file_path.lower():
-                        score += 8  # Increased from 5
-                
-                # Medium priority: partial matches in file path
-                for word in query_words:
-                    if len(word) > 3 and any(word in part for part in file_path.lower().split('_')):
-                        score += 5  # Increased from 3
-                
-                # Boost for exact class/function name matches
-                for word in query_words:
-                    if word in ['chunker', 'chunking', 'chunk', 'service']:
-                        if 'chunker' in file_path.lower():
-                            score += 10  # High boost for exact matches
-                    elif word in ['embedding', 'model', 'config', 'configuration', 'transformer', 'sentence']:
-                        if any(keyword in file_path.lower() for keyword in ['config', 'chunker', 'embedding', 'vector']):
-                            score += 12  # Very high boost for embedding-related files
-                        elif 'all-minilm' in file_path.lower() or 'sentence' in file_path.lower():
-                            score += 15  # Maximum boost for specific model files
-                    elif word in ['default', 'parameter', 'setting']:
-                        if any(keyword in file_path.lower() for keyword in ['config', 'chunker', 'main']):
-                            score += 6  # Boost for configuration files
-                
-                # Language-specific scoring
-                if language:
-                    if any(word in language.lower() for word in query_words):
-                        score += 2
-                    # Boost for common code files
-                    if language in ['python', 'javascript', 'typescript']:
-                        score += 1
-                
-                # File type priority
-                if file_path.endswith('.md'):  # Documentation files
-                    score += 4
-                elif file_path.endswith(('.py', '.js', '.ts')):  # Code files
-                    score += 2
-                elif file_path.endswith(('.txt', '.json', '.yaml', '.yml')):  # Config files
-                    score += 1
-                
-                # Special file names that are often relevant
-                special_files = ['readme', 'config', 'main', 'index', 'chunker', 'indexer', 'crawler']
-                for special in special_files:
-                    if special in file_path.lower():
-                        score += 2
-                
-                # Add content-based scoring if file content is available
-                content_score = self._calculate_content_relevance(file_info, query_words)
-                score += content_score
-                
-                # Only include files with meaningful scores
-                if score > 0:
-                    relevant_files.append((file_info, score))
-            
-            # Sort by score and take top files
-            relevant_files.sort(key=lambda x: x[1], reverse=True)
-            
-            # Deduplicate by file path (keep highest score) before taking top 3
-            seen_files = {}
-            for file_info, score in relevant_files:
-                file_path = file_info.get('file_path', '')
-                if file_path not in seen_files or score > seen_files[file_path][1]:
-                    seen_files[file_path] = (file_info, score)
-            
-            # Convert back to list and sort by score
-            deduplicated_files = list(seen_files.values())
-            deduplicated_files.sort(key=lambda x: x[1], reverse=True)
-            top_files = deduplicated_files[:3]  # Top 3 most relevant files to reduce context
-            
-            # Read content from the most relevant files
-            retrieved_content = []
-            sources = []
-            
-            for file_info, score in top_files:
-                file_path = file_info.get('file_path', '')
-                
-                repo_path = Path("./storage/repositories/web-rag-service")
-                full_path = repo_path / file_path
-                
-                if full_path.exists():
-                    try:
-                        # Read file content
-                        content = full_path.read_text(encoding='utf-8')
-                        
-                        # Smart content extraction based on query
-                        content_preview, line_start, line_end = self._extract_relevant_content(
-                            content, query, file_path
-                        )
-                        
-                        retrieved_content.append(f"File: {file_path} (lines {line_start}-{line_end})\n{content_preview}")
-                        
-                        # Normalize score to 0-1 range (max possible score is around 30)
-                        normalized_score = min(score / 30.0, 1.0)
-                        
-                        sources.append(SourceReference(
-                            file=file_path,
-                            content=content_preview,
-                            score=normalized_score,
-                            line_start=line_start,
-                            line_end=line_end,
-                            type="code" if file_path.endswith(('.py', '.js', '.ts', '.java', '.cpp', '.c', '.h', '.hpp', '.rs', '.go', '.rb', '.php', '.swift', '.kt', '.scala', '.sh', '.bash')) else "doc"
-                        ))
-                    except Exception as e:
-                        logger.debug(f"Error reading file {file_path}: {e}")
-                        continue
-            
-            return retrieved_content, sources
-            
-        except Exception as e:
-            logger.error(f"Error retrieving content: {e}")
             return [], []
-
-    def _extract_relevant_content(self, content: str, query: str, file_path: str) -> tuple[str, int, int]:
-        """
-        Extract the most relevant section of content based on query.
-        
-        Args:
-            content: Full file content
-            query: User query
-            file_path: Path to file
-            
-        Returns:
-            Tuple of (extracted_content, line_start, line_end)
-        """
-        lines = content.split('\n')
-        query_lower = query.lower()
-        query_words = set(query_lower.split())
-        
-        # Keywords that indicate we should look for API patterns
-        api_keywords = {'endpoint', 'api', 'route', 'decorator', '@app', '@router', 'get', 'post', 'put', 'delete'}
-        looking_for_apis = bool(query_words & api_keywords)
-        
-        if looking_for_apis and file_path.endswith('.py'):
-            # Look for FastAPI/Flask decorator patterns
-            relevant_sections = []
-            current_section = []
-            section_start = 0
-            in_endpoint = False
-            
-            for i, line in enumerate(lines, 1):
-                # Check if this line defines an endpoint
-                if '@app.' in line or '@router.' in line or 'def ' in line:
-                    if '@app.' in line or '@router.' in line:
-                        # Start of endpoint definition
-                        if current_section and in_endpoint:
-                            relevant_sections.append((section_start, i-1, '\n'.join(current_section)))
-                        current_section = [line]
-                        section_start = i
-                        in_endpoint = True
-                    elif in_endpoint and 'def ' in line:
-                        # Function definition following decorator
-                        current_section.append(line)
-                        # Get next 3-5 lines for context
-                        for j in range(1, min(6, len(lines) - i)):
-                            current_section.append(lines[i + j - 1])
-                        relevant_sections.append((section_start, i + 5, '\n'.join(current_section)))
-                        current_section = []
-                        in_endpoint = False
-                elif in_endpoint:
-                    current_section.append(line)
-            
-            # If we found endpoint definitions, return them
-            if relevant_sections:
-                # Combine up to 3 most relevant sections
-                combined = []
-                total_lines = 0
-                start_line = relevant_sections[0][0]
-                end_line = relevant_sections[0][1]
-                
-                for sec_start, sec_end, sec_content in relevant_sections[:5]:
-                    combined.append(f"# Lines {sec_start}-{sec_end}")
-                    combined.append(sec_content)
-                    combined.append("")
-                    end_line = max(end_line, sec_end)
-                    total_lines += len(sec_content.split('\n'))
-                    if total_lines > 100:  # Limit to ~100 lines
-                        break
-                
-                extracted = '\n'.join(combined)
-                if len(extracted) > 2000:
-                    extracted = extracted[:2000] + "\n... (more endpoints below)"
-                
-                return extracted, start_line, end_line
-        
-        # Default: Take first 1000 characters with smart splitting
-        if len(content) <= 1000:
-            return content, 1, len(lines)
-        
-        # Try to find relevant section by keyword matching
-        best_start = 0
-        best_score = 0
-        window_size = 1000
-        
-        for i in range(0, len(content) - window_size, 200):
-            window = content[i:i+window_size].lower()
-            score = sum(1 for word in query_words if word in window)
-            if score > best_score:
-                best_score = score
-                best_start = i
-        
-        # Extract content around best match
-        extract_start = max(0, best_start)
-        extract_end = min(len(content), best_start + 1000)
-        extracted = content[extract_start:extract_end]
-        
-        # Calculate line numbers
-        lines_before = content[:extract_start].count('\n')
-        lines_in_extract = extracted.count('\n')
-        
-        if extract_end < len(content):
-            extracted += "\n... (truncated)"
-        
-        return extracted, lines_before + 1, lines_before + lines_in_extract + 1
-
-    def _validate_response(self, response: str, context: List[str]) -> str:
+    
+    def _validate_response(self, response: str) -> str:
         """
         Validate and clean the generated response for accuracy.
-        
-        Args:
-            response: Generated response text
-            context: Retrieved context for validation
-            
-        Returns:
-            Cleaned and validated response
         """
         # Remove common artifacts
         response = response.replace("<|endoftext|>", "")
         response = response.replace("</s>", "")
         response = response.replace("[INST]", "")
-        
-        # Remove incomplete sentences at the end
-        lines = response.split('\n')
-        cleaned_lines = []
-        
-        for line in lines:
-            line = line.strip()
-            if line and not line.endswith(('```', '```python', '```json')):
-                cleaned_lines.append(line)
-        
-        # Join lines and clean up
-        cleaned_response = '\n'.join(cleaned_lines)
-        
-        # Remove trailing incomplete sentences
-        sentences = cleaned_response.split('. ')
-        if len(sentences) > 1 and len(sentences[-1]) < 20:
-            cleaned_response = '. '.join(sentences[:-1]) + '.'
-        
-        return cleaned_response.strip()
+        return response.strip()
 
-    def _calculate_content_relevance(self, file_info: dict, query_words: set) -> int:
-        """
-        Calculate content-based relevance score by reading file content.
-        
-        Args:
-            file_info: File metadata information
-            query_words: Set of query words
-            
-        Returns:
-            Content relevance score
-        """
-        try:
-            file_path = file_info.get('file_path', '')
-            repo_path = Path("./storage/repositories/web-rag-service")
-            full_path = repo_path / file_path
-            
-            if not full_path.exists():
-                return 0
-            
-            # Read first 1000 characters for content analysis
-            content = full_path.read_text(encoding='utf-8')[:1000].lower()
-            
-            score = 0
-            
-            # Check for exact keyword matches in content
-            for word in query_words:
-                if word in content:
-                    score += 3
-                    
-            # Check for related terms
-            related_terms = {
-                'embedding': ['sentence', 'transformer', 'model', 'vector', 'embedding', 'all-minilm', 'minilm'],
-                'transformer': ['sentence', 'transformer', 'model', 'embedding', 'all-minilm', 'minilm', 'sentence_transformers'],
-                'model': ['model', 'llm', 'transformer', 'neural', 'ai', 'all-minilm', 'minilm', 'sentence_transformers'],
-                'config': ['config', 'configuration', 'setting', 'default', 'parameter'],
-                'chunking': ['chunk', 'chunking', 'split', 'segment', 'token']
-            }
-            
-            # Special boost for specific model names
-            if 'all-minilm-l6-v2' in content:
-                score += 15  # Maximum boost for the specific model
-            elif 'all-minilm' in content:
-                score += 10  # High boost for model family
-            elif 'sentence_transformers' in content:
-                score += 8  # Boost for library name
-            
-            for query_word in query_words:
-                if query_word in related_terms:
-                    for term in related_terms[query_word]:
-                        if term in content:
-                            score += 2
-            
-            # Boost for class/function definitions
-            if any(word in content for word in ['class ', 'def ', 'function ']):
-                score += 1
-                
-            # Boost for configuration sections
-            if any(section in content for section in ['config', 'settings', 'default', 'parameter']):
-                score += 2
-                
-            return min(score, 10)  # Cap at 10 points
-            
-        except Exception as e:
-            logger.debug(f"Error calculating content relevance for {file_path}: {e}")
-            return 0
+
 
     # ==================== HYBRID RETRIEVAL METHODS ====================
     
@@ -1741,15 +1068,7 @@ Answer naturally and conversationally about what you observe in the repository.
         return chunks
     
     def _fallback_keyword_retrieval(self, query: str, top_k: int) -> List[SourceReference]:
-        """
-        Fallback retrieval method using basic keyword matching when hybrid indices are not available.
-        """
-        try:
-            _, sources = self._retrieve_relevant_content(query)
-            return sources[:top_k]
-        except Exception as e:
-            logger.error(f"Error in fallback retrieval: {e}")
-            return []
+        return []
     
     async def rebuild_indices(self):
         """
@@ -1774,74 +1093,7 @@ Answer naturally and conversationally about what you observe in the repository.
 
     # ==================== END HYBRID RETRIEVAL METHODS ====================
 
-    def _fact_check_response(self, response: str, context: List[SourceReference], query: str) -> str:
-        """
-        Fact-check the response against source content to improve accuracy.
-        
-        Args:
-            response: Generated response text
-            context: Retrieved source references
-            query: Original user query
-            
-        Returns:
-            Fact-checked and corrected response
-        """
-        try:
-            # Common fact-checking patterns
-            corrections = []
-            
-            # Check for embedding model references
-            if 'embedding' in query.lower() and 'model' in query.lower():
-                # Look for actual model names in context
-                actual_models = []
-                for src in context:
-                    if hasattr(src, 'content'):
-                        content = src.content.lower()
-                        if 'all-minilm-l6-v2' in content:
-                            actual_models.append('all-MiniLM-L6-v2')
-                        elif 'all-minilm' in content:
-                            actual_models.append('all-MiniLM-L6-v2')
-                        elif 'sentence_transformers' in content:
-                            actual_models.append('sentence-transformers')
-                
-                # If response mentions wrong model, add correction
-                if actual_models and not any(model.lower() in response.lower() for model in actual_models):
-                    corrections.append(f"\n\nNote: Based on the source code, the actual embedding model is: {', '.join(set(actual_models))}")
-                elif not actual_models and 'sentence' in response.lower() and 'transformer' in response.lower():
-                    # If no specific model found but response is generic, provide specific info
-                    corrections.append(f"\n\nNote: The specific model used is all-MiniLM-L6-v2 as configured in the chunker.py file.")
-            
-            # Check for configuration file references
-            if 'config' in query.lower():
-                config_files = [src.file for src in context if 'config' in src.file.lower()]
-                if config_files and not any(f in response for f in config_files):
-                    corrections.append(f"\n\nConfiguration is found in: {', '.join(config_files)}")
-            
-            # Check for default values
-            if 'default' in query.lower():
-                # Look for default values in context
-                default_values = []
-                for src in context:
-                    if hasattr(src, 'content'):
-                        content = src.content
-                        # Look for common default patterns
-                        import re
-                        defaults = re.findall(r'default[:\s=]+["\']?([^"\'\s,]+)["\']?', content, re.IGNORECASE)
-                        default_values.extend(defaults)
-                
-                if default_values:
-                    unique_defaults = list(set(default_values))[:3]  # Top 3 unique defaults
-                    corrections.append(f"\n\nDefault values found in source: {', '.join(unique_defaults)}")
-            
-            # Add corrections to response if any found
-            if corrections:
-                response += ''.join(corrections)
-            
-            return response
-            
-        except Exception as e:
-            logger.debug(f"Error in fact-checking: {e}")
-            return response
+
 
 
 # Singleton instance

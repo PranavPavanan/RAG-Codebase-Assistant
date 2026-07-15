@@ -29,17 +29,6 @@ class RepositoryBase(BaseModel):
         # Handle datetime objects returned by PyGithub
         return v.isoformat()
 
-class Repository(RepositoryBase):
-    clone_url: str
-    ssh_url: str
-    open_issues: int
-    watchers: int
-    license: str
-    is_private: bool
-    is_fork: bool
-    has_wiki: bool
-    has_issues: bool
-
 class RepositorySearchRequest(BaseModel):
     query: str
     username: Optional[str] = None
@@ -57,10 +46,3 @@ class RepositorySearchResponse(BaseModel):
     total_count: int
     page: int
 
-class RepositoryValidationRequest(BaseModel):
-    url: str
-
-class RepositoryValidationResponse(BaseModel):
-    valid: bool
-    message: str
-    repository_info: Optional[RepositoryBase] = None

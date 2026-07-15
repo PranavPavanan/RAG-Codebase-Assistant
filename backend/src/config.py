@@ -11,17 +11,7 @@ load_dotenv()
 # Define the base directory of the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Model configurations - easily switch models by changing MODEL_NAME
-MODEL_CONFIGS = {
-    "phi3-mini": {
-        "filename": "Q4_K_M-00001-of-00001.gguf",  # Phi-3 Mini 128k context
-        "context_length": 8192,  # Using 8k for practical purposes (full 128k is available but slower)
-        "max_tokens": 512,  # Increased for better responses
-        "temperature": 0.7,
-        "top_p": 0.95,
-        "n_threads": 4,
-        "n_gpu_layers": 0,
-        "system_prompt": """You are an expert code analysis assistant helping developers understand their codebase. 
+DEFAULT_SYSTEM_PROMPT = """You are an expert code analysis assistant helping developers understand their codebase.
 
 Guidelines:
 1. Provide clear, conversational answers - avoid mentioning "code snippets" or "provided files"
@@ -38,7 +28,19 @@ Special Instructions:
 - When you see a clear pattern (like multiple @app.post decorators), enumerate them confidently
 - Don't say "endpoints are not explicitly listed" if you can see decorator patterns in the code
 
-Answer style: Professional but conversational, as if explaining to a colleague. Be confident when the evidence is clear.""",
+Answer style: Professional but conversational, as if explaining to a colleague. Be confident when the evidence is clear."""
+
+# Model configurations - easily switch models by changing MODEL_NAME
+MODEL_CONFIGS = {
+    "phi3-mini": {
+        "filename": "Q4_K_M-00001-of-00001.gguf",  # Phi-3 Mini 128k context
+        "context_length": 8192,  # Using 8k for practical purposes (full 128k is available but slower)
+        "max_tokens": 512,  # Increased for better responses
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "n_threads": 4,
+        "n_gpu_layers": 0,
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
         "stop_tokens": ["<|end|>", "<|endoftext|>", "<|user|>", "<|assistant|>", "\n\nUser Question:", "\n\nFile:"],
         "prompt_format": "phi3"  # Phi-3 uses special format
     },
@@ -50,24 +52,7 @@ Answer style: Professional but conversational, as if explaining to a colleague. 
         "top_p": 0.95,
         "n_threads": 2,
         "n_gpu_layers": 0,
-        "system_prompt": """You are an expert code analysis assistant helping developers understand their codebase.
-
-Guidelines:
-1. Provide clear, conversational answers - avoid mentioning "code snippets" or "provided files"  
-2. Answer questions based on what you observe in the repository
-3. Be specific about file names, functions, and implementations when relevant
-4. If something isn't found, say so clearly rather than being vague
-5. Focus on answering the actual question directly and concisely
-6. Reference the repository/codebase naturally (e.g., "In this repository..." or "The codebase uses...")
-
-Special Instructions:
-- When asked about API endpoints, LIST them explicitly with their HTTP methods (GET, POST, PUT, DELETE)
-- Look for decorators like @app.get(), @app.post(), @router.get(), @router.post()
-- For FastAPI/Flask apps, identify routes by their decorator patterns
-- When you see a clear pattern (like multiple @app.post decorators), enumerate them confidently
-- Don't say "endpoints are not explicitly listed" if you can see decorator patterns in the code
-
-Answer style: Professional but conversational, as if explaining to a colleague. Be confident when the evidence is clear.""",
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
         "stop_tokens": ["</s>", "[INST]", "<|endoftext|>", "\n\nUser Question:", "\n\nFile:"],
         "prompt_format": "llama2"
     },
@@ -79,24 +64,7 @@ Answer style: Professional but conversational, as if explaining to a colleague. 
         "top_p": 0.95,
         "n_threads": 4,
         "n_gpu_layers": 0,
-        "system_prompt": """You are an expert code analysis assistant helping developers understand their codebase.
-
-Guidelines:
-1. Provide clear, conversational answers - avoid mentioning "code snippets" or "provided files"  
-2. Answer questions based on what you observe in the repository
-3. Be specific about file names, functions, and implementations when relevant
-4. If something isn't found, say so clearly rather than being vague
-5. Focus on answering the actual question directly and concisely
-6. Reference the repository/codebase naturally (e.g., "In this repository..." or "The codebase uses...")
-
-Special Instructions:
-- When asked about API endpoints, LIST them explicitly with their HTTP methods (GET, POST, PUT, DELETE)
-- Look for decorators like @app.get(), @app.post(), @router.get(), @router.post()
-- For FastAPI/Flask apps, identify routes by their decorator patterns
-- When you see a clear pattern (like multiple @app.post decorators), enumerate them confidently
-- Don't say "endpoints are not explicitly listed" if you can see decorator patterns in the code
-
-Answer style: Professional but conversational, as if explaining to a colleague. Be confident when the evidence is clear.""",
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
         "stop_tokens": ["<|end_of_text|>", "<|eot_id|>", "\n\nUser Question:", "\n\nFile:"],
         "prompt_format": "llama3"
     },
@@ -108,24 +76,7 @@ Answer style: Professional but conversational, as if explaining to a colleague. 
         "top_p": 0.95,
         "n_threads": 4,
         "n_gpu_layers": 0,
-        "system_prompt": """You are an expert code analysis assistant helping developers understand their codebase.
-
-Guidelines:
-1. Provide clear, conversational answers - avoid mentioning "code snippets" or "provided files"  
-2. Answer questions based on what you observe in the repository
-3. Be specific about file names, functions, and implementations when relevant
-4. If something isn't found, say so clearly rather than being vague
-5. Focus on answering the actual question directly and concisely
-6. Reference the repository/codebase naturally (e.g., "In this repository..." or "The codebase uses...")
-
-Special Instructions:
-- When asked about API endpoints, LIST them explicitly with their HTTP methods (GET, POST, PUT, DELETE)
-- Look for decorators like @app.get(), @app.post(), @router.get(), @router.post()
-- For FastAPI/Flask apps, identify routes by their decorator patterns
-- When you see a clear pattern (like multiple @app.post decorators), enumerate them confidently
-- Don't say "endpoints are not explicitly listed" if you can see decorator patterns in the code
-
-Answer style: Professional but conversational, as if explaining to a colleague. Be confident when the evidence is clear.""",
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
         "stop_tokens": ["<|im_end|>", "<|im_start|>", "<|endoftext|>", "\n\nUser Question:", "\n\nFile:"],
         "prompt_format": "chatml"
     }

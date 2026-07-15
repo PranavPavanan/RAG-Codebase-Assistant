@@ -7,13 +7,10 @@ from github import Repository as GHRepository
 
 from src.config import settings
 from src.models.repository import (
-    Repository,
     RepositoryBase,
     RepositorySearchRequest,
     RepositorySearchResponse,
     RepositoryTrendingRequest,
-    RepositoryValidationRequest,
-    RepositoryValidationResponse,
 )
 
 
@@ -158,48 +155,6 @@ class GitHubService:
             raise ValueError(f"Trending search failed: {str(e)}") from e
 
     # ── Validation & helpers ───────────────────────────────────────────────
-    def validate_repository_url(self, request: RepositoryValidationRequest) -> RepositoryValidationResponse:
-        """Validate a GitHub repository URL."""
-        url = request.url.strip()
-        github_pattern = r"^https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$"
-        match = re.match(github_pattern, url)
-
-        if not match:
-            return RepositoryValidationResponse(
-                valid=False,
-                message="Invalid GitHub repository URL format. Expected: https://github.com/owner/repo",
-            )
-
-        owner, repo_name = match.groups()
-        try:
-            repo = self.github.get_repo(f"{owner}/{repo_name}")
-            repo_base = self._convert_to_repository_base(repo)
-            return RepositoryValidationResponse(
-                valid=True,
-                message="Repository is valid and accessible",
-                repository_info=repo_base,
-            )
-        except GithubException as e:
-            if e.status == 404:
-                return RepositoryValidationResponse(valid=False, message="Repository not found or not accessible")
-            return RepositoryValidationResponse(valid=False, message=f"Error accessing repository: {e.data.get('message', str(e))}")
-        except Exception as e:
-            return RepositoryValidationResponse(valid=False, message=f"Validation error: {str(e)}")
-
-    def get_repository(self, repo_id: str) -> Optional[Repository]:
-        try:
-            repo = self.github.get_repo(repo_id)
-            return self._convert_to_repository(repo)
-        except Exception:
-            return None
-
-    def get_repository_by_url(self, url: str) -> Optional[Repository]:
-        github_pattern = r"^https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$"
-        match = re.match(github_pattern, url)
-        if not match:
-            return None
-        owner, repo_name = match.groups()
-        return self.get_repository(f"{owner}/{repo_name}")
 
     def clone_repository(self, repo_url: str, target_dir: str) -> bool:
         try:
@@ -231,21 +186,6 @@ class GitHubService:
             created_at=gh_repo.created_at,
         )
 
-    def _convert_to_repository(self, gh_repo: GHRepository) -> Repository:
-        """Convert a PyGithub Repository object to our full Repository model."""
-        base_dict = self._convert_to_repository_base(gh_repo).model_dump()
-        return Repository(
-            **base_dict,
-            clone_url=gh_repo.clone_url,
-            ssh_url=gh_repo.ssh_url,
-            open_issues=gh_repo.open_issues_count,
-            watchers=gh_repo.watchers_count,
-            license=gh_repo.license.name if gh_repo.license else None,
-            is_private=gh_repo.private,
-            is_fork=gh_repo.fork,
-            has_wiki=gh_repo.has_wiki,
-            has_issues=gh_repo.has_issues,
-        )
 
 
 # Singleton instance

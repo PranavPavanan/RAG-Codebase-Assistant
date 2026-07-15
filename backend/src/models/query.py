@@ -8,6 +8,7 @@ class SourceReference(BaseModel):
     end_line: int
     content: str
     score: float
+    type: Optional[str] = None
 
     @field_validator('score')
     @classmethod
@@ -45,43 +46,3 @@ class ChatMessage(BaseModel):
             raise ValueError('Invalid role')
         return v
 
-class ChatHistoryRequest(BaseModel):
-    conversation_id: str
-    limit: Optional[int] = None
-
-class ChatHistoryResponse(BaseModel):
-    conversation_id: str
-    messages: List[ChatMessage]
-    total_messages: int
-    created_at: datetime
-    total_count: Optional[int] = None
-
-class ChatContextResponse(BaseModel):
-    conversation_id: str
-    message_count: int
-    user_message_count: int
-    assistant_message_count: int
-    last_query: Optional[str] = None
-    last_response: Optional[str] = None
-    created_at: datetime
-    last_updated: datetime
-
-class SessionInfo(BaseModel):
-    session_id: str
-    created_at: datetime
-    last_activity: datetime
-    conversation_count: int
-    total_messages: int
-
-class ConversationInfo(BaseModel):
-    conversation_id: str
-    session_id: str
-    created_at: datetime
-    message_count: int
-
-class SessionClearRequest(BaseModel):
-    session_id: str
-
-class SessionClearResponse(BaseModel):
-    success: bool
-    cleared_count: int

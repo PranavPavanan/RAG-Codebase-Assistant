@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api import chat, health, indexing, repositories, search, websocket
+from src.api import chat, health, indexing, search
 from src.config import settings
 from src.services.rag_service import get_rag_service
 
@@ -66,9 +66,5 @@ app.add_middleware(
 # Include routers with /api prefix
 app.include_router(health.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
-app.include_router(repositories.router, prefix="/api")
 app.include_router(indexing.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
-
-# WebSocket endpoints (no prefix for WebSocket connections)
-app.include_router(websocket.router)

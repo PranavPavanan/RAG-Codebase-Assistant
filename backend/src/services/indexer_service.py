@@ -169,6 +169,16 @@ class IndexerService:
                     if file.is_file():
                         file.unlink()
 
+            try:
+                from src.services.rag_service import get_rag_service
+                rag_service = get_rag_service()
+                rag_service.faiss_index = None
+                rag_service.bm25_index = None
+                rag_service.document_chunks = []
+                rag_service.chunk_texts = []
+            except Exception as e:
+                pass
+
             return {
                 "success": True,
                 "files_removed": files_removed,
@@ -345,7 +355,14 @@ class IndexerService:
             }
             
             await self._update_progress(task_id, "Indexing completed successfully!", len(files_to_process), len(files_to_process), 100)
-
+            
+            # Step 6: Trigger RAG service to rebuild FAISS and BM25 indices
+            try:
+                from src.services.rag_service import get_rag_service
+                rag_service = get_rag_service()
+                await rag_service.rebuild_indices()
+            except Exception as e:
+                task["error"] = f"Warning: Repository indexed but semantic search indices failed to build: {e}"
         except Exception as e:
             task["status"] = IndexingStatus.FAILED
             task["error"] = str(e)
@@ -437,27 +454,13 @@ class IndexerService:
         return fnmatch(file_path, pattern)
 
     async def _save_index_metadata(self, task_id: str, processed_files: List[FileIndexEntry], repo_url: str):
-        """Save index metadata to file with deduplication."""
-        # Deduplicate files by file_path to prevent duplicate entries
-        unique_files = {}
-        for file_entry in processed_files:
-            file_path = file_entry.file_path
-            if file_path not in unique_files:
-                unique_files[file_path] = file_entry
-            else:
-                # Keep the most recent entry if duplicates found
-                if file_entry.indexed_at > unique_files[file_path].indexed_at:
-                    unique_files[file_path] = file_entry
-        
-        # Convert back to list
-        deduplicated_files = list(unique_files.values())
-        
+        """Save index metadata to file."""
         metadata = {
             "task_id": task_id,
             "repository_url": repo_url,
             "repository_name": repo_url.split("/")[-1].replace(".git", ""),
-            "file_count": len(deduplicated_files),
-            "files": [file_entry.dict() for file_entry in deduplicated_files],
+            "file_count": len(processed_files),
+            "files": [file_entry.dict() for file_entry in processed_files],
             "indexed_at": datetime.utcnow().isoformat(),
             "created_at": datetime.utcnow().isoformat(),
         }
