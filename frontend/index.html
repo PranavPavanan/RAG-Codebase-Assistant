@@ -3,58 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <meta name="description" content="RAG GitHub Assistant — AI-powered tool to search, index, and query GitHub repositories with natural language.">
     <title>RAG GitHub Assistant</title>
-    <link rel="stylesheet" href="styles.css?v=2">
+    <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- App Shell -->
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
     <div class="app-shell">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="brand">
                 <div class="brand-icon">
-                    <i data-lucide="github"></i>
+                    <i data-lucide="code-2"></i>
                 </div>
                 <div class="brand-text">
-                    <h1>RAG GitHub Assistant</h1>
+                    <h1>RAG Assistant</h1>
                     <p>Search • Index • Ask</p>
                 </div>
             </div>
+
+            <div class="sidebar-divider"></div>
+
             <nav class="side-nav">
-                <button class="nav-item active" data-route="search">
+                <button class="nav-item active" data-route="search" id="nav-search">
                     <i data-lucide="search"></i>
-                    <span>Search</span>
+                    <span>Search Repos</span>
                 </button>
-                <button class="nav-item" data-route="index">
+                <button class="nav-item" data-route="index" id="nav-index">
                     <i data-lucide="database"></i>
                     <span>Index</span>
                 </button>
-                <button class="nav-item" data-route="chat" disabled>
+                <button class="nav-item" data-route="chat" id="nav-chat" disabled>
                     <i data-lucide="message-square"></i>
                     <span>Chat</span>
                 </button>
             </nav>
+
             <div class="sidebar-footer">
                 <div id="status-chip" class="status-chip">
                     <span class="dot"></span>
                     <span id="status-text">No index</span>
                 </div>
                 <div class="theme-toggle-wrapper">
-                    <button id="theme-toggle" class="theme-switch" aria-label="Toggle theme" role="switch" aria-checked="false" data-mode="light" title="Toggle light/dark theme">
+                    <span class="theme-switch-label">Theme</span>
+                    <button id="theme-toggle" class="theme-switch" aria-label="Toggle theme" role="switch" aria-checked="false" data-mode="light">
                         <span class="theme-icons">
                             <i data-lucide="sun" class="icon-sun"></i>
                             <i data-lucide="moon" class="icon-moon"></i>
                         </span>
                         <span class="theme-knob"></span>
                     </button>
-                    <span class="theme-switch-label">Theme</span>
                 </div>
             </div>
         </aside>
@@ -62,40 +65,46 @@
         <!-- Main Content -->
         <main class="workspace">
             <header class="workspace-header">
-                <div class="header-left">
+                <div class="header-left" style="display:flex;align-items:center;gap:.75rem;">
+                    <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Open menu">
+                        <i data-lucide="menu"></i>
+                    </button>
                     <div class="headline">
                         <i data-lucide="sparkles"></i>
-                        <h2 id="headline-text">Welcome</h2>
+                        <h2 id="headline-text">Search GitHub</h2>
                     </div>
                 </div>
                 <div class="header-right">
                     <div id="repo-banner" class="repo-banner hidden">
-                        <i data-lucide="code"></i>
+                        <i data-lucide="git-branch"></i>
                         <span class="label">Indexed:</span>
                         <span id="repo-banner-name" class="repo-name"></span>
-                        <span class="muted">|</span>
+                        <span class="muted">·</span>
                         <span id="repo-banner-files" class="muted"></span>
                     </div>
                 </div>
             </header>
 
-            <!-- Panels -->
+            <!-- Search Panel -->
             <section id="panel-search" class="panel active">
                 <div class="search-section">
                     <div class="card">
                         <div class="card-header">
-                            <h2>Search GitHub Repositories</h2>
-                            <p>Find a repository to analyze and query with AI</p>
+                            <div>
+                                <h2>Search GitHub Repositories</h2>
+                                <p>Find a repository to analyze and query with AI</p>
+                            </div>
                         </div>
                         <div class="card-body">
                             <form id="search-form" class="search-form">
                                 <div class="search-input-group">
                                     <i data-lucide="search" class="search-icon"></i>
-                                    <input 
-                                        type="text" 
-                                        id="search-query" 
-                                        placeholder="Search repositories (e.g., 'react', 'typescript orm', 'machine learning')"
+                                    <input
+                                        type="text"
+                                        id="search-query"
+                                        placeholder="Search repositories — e.g. 'react hooks', 'fastapi', 'python orm'"
                                         class="search-input"
+                                        autocomplete="off"
                                     >
                                 </div>
                                 <button type="submit" class="btn btn-primary" id="search-btn">
@@ -111,7 +120,10 @@
                     <div id="selected-repo" class="card selected-repo hidden">
                         <div class="card-header">
                             <h3>Selected Repository</h3>
-                            <button class="btn btn-ghost btn-sm" id="clear-selection">Clear</button>
+                            <button class="btn btn-ghost btn-sm" id="clear-selection">
+                                <i data-lucide="x"></i>
+                                Clear
+                            </button>
                         </div>
                         <div class="card-body">
                             <div class="repo-info">
@@ -144,24 +156,27 @@
                 </div>
             </section>
 
+            <!-- Index Panel -->
             <section id="panel-index" class="panel">
                 <div class="indexing-section">
                     <div class="card">
                         <div class="card-header">
-                            <h2>Repository Indexing</h2>
-                            <p>Index a repository to enable AI-powered code queries</p>
+                            <div>
+                                <h2>Repository Indexing</h2>
+                                <p>Index a repository to enable AI-powered code queries</p>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div id="selected-repo-display" class="selected-repo-display hidden">
-                                <p class="repo-label">Selected Repository:</p>
+                                <p class="repo-label">Selected Repository</p>
                                 <p id="selected-repo-name" class="repo-name"></p>
                             </div>
                             <div id="url-input-group" class="url-input-group">
-                                <label class="input-label">Repository URL</label>
-                                <input 
-                                    type="text" 
-                                    id="repo-url" 
-                                    placeholder="https://github.com/owner/repo"
+                                <label class="input-label" for="repo-url">Repository URL</label>
+                                <input
+                                    type="text"
+                                    id="repo-url"
+                                    placeholder="https://github.com/owner/repository"
                                     class="input"
                                 >
                             </div>
@@ -179,7 +194,7 @@
                         <div class="card-header">
                             <div class="progress-header">
                                 <div class="progress-title">
-                                    <i id="progress-icon" data-lucide="alert-circle"></i>
+                                    <i id="progress-icon" data-lucide="loader-2"></i>
                                     <span>Indexing Status</span>
                                 </div>
                                 <span id="progress-status" class="progress-status">pending</span>
@@ -206,21 +221,27 @@
                                 </div>
                             </div>
                             <div id="progress-error" class="error-message hidden"></div>
-                            <button id="start-querying" class="btn btn-primary btn-full hidden">Start Querying</button>
+                            <button id="start-querying" class="btn btn-primary btn-full hidden" style="margin-top:1rem;">
+                                <i data-lucide="message-square"></i>
+                                Start Chatting
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Current Index -->
+                    <!-- Current Index Stats -->
                     <div id="current-index" class="card hidden">
                         <div class="card-header">
                             <h3>Current Index</h3>
-                            <button id="clear-index" class="btn btn-destructive btn-sm">Clear Index</button>
+                            <button id="clear-index" class="btn btn-destructive btn-sm">
+                                <i data-lucide="trash-2"></i>
+                                Clear
+                            </button>
                         </div>
                         <div class="card-body">
                             <div class="index-stats">
                                 <div class="stat">
                                     <p class="stat-label">Repository</p>
-                                    <p id="index-repo-name" class="stat-value">Unknown</p>
+                                    <p id="index-repo-name" class="stat-value" style="font-size:1rem;">—</p>
                                 </div>
                                 <div class="stat">
                                     <p class="stat-label">Files Indexed</p>
@@ -236,19 +257,20 @@
                 </div>
             </section>
 
-            <section id="panel-chat" class="panel">
+            <!-- Chat Panel -->
+            <section id="panel-chat" class="panel" style="padding:0;display:none;flex-direction:column;">
                 <div class="chat-container">
                     <!-- Conversation Tabs -->
                     <div id="conversation-tabs" class="conversation-tabs hidden">
                         <div class="tabs-list" id="tabs-list"></div>
                         <button id="new-chat-btn" class="btn btn-outline btn-sm">
                             <i data-lucide="plus"></i>
-                            <span class="btn-text">New Chat</span>
+                            <span class="btn-text">New</span>
                         </button>
                     </div>
 
-                    <!-- Chat Interface -->
                     <div class="chat-interface">
+                        <!-- Chat Header -->
                         <div class="chat-header">
                             <h2>AI Code Assistant</h2>
                             <div class="chat-actions">
@@ -256,8 +278,9 @@
                                     <i data-lucide="plus"></i>
                                     New Chat
                                 </button>
-                                <button id="clear-chat" class="btn btn-outline btn-sm" disabled>
-                                    Clear Chat
+                                <button id="clear-chat" class="btn btn-ghost btn-sm" disabled>
+                                    <i data-lucide="eraser"></i>
+                                    Clear
                                 </button>
                             </div>
                         </div>
@@ -265,56 +288,58 @@
                         <!-- Chat Messages -->
                         <div class="chat-messages" id="chat-messages">
                             <div id="no-index-message" class="no-index-message">
+                                <div class="empty-icon"><i data-lucide="database"></i></div>
                                 <p>No repository indexed yet</p>
-                                <p>Please search for and index a repository to start querying</p>
+                                <p>Search for a repository and index it to start asking questions about the code.</p>
                             </div>
                             <div id="welcome-message" class="welcome-message hidden">
+                                <div class="empty-icon"><i data-lucide="sparkles"></i></div>
                                 <p class="welcome-title">Ask me anything about the code!</p>
-                                <p class="welcome-examples">
-                                    Examples: "How does authentication work?", "Explain the main function", "Where is the database configured?"
-                                </p>
+                                <div class="welcome-chips">
+                                    <span class="welcome-chip" data-query="What does the main function do?">What does main() do?</span>
+                                    <span class="welcome-chip" data-query="How is authentication implemented?">How is auth implemented?</span>
+                                    <span class="welcome-chip" data-query="What are the main API endpoints?">List API endpoints</span>
+                                    <span class="welcome-chip" data-query="Explain the folder structure">Explain folder structure</span>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Chat Error -->
-                        <div id="chat-error" class="error-message hidden"></div>
+                        <div id="chat-error" class="error-message hidden" style="margin:0 1.5rem 0.5rem;"></div>
 
-                        <!-- Repository Info -->
+                        <!-- Repo Info Bar -->
                         <div id="repo-info-bar" class="repo-info-bar hidden">
                             <div class="repo-info-content">
-                                <i data-lucide="code"></i>
-                                <span>What do you want to know about</span>
+                                <i data-lucide="git-branch"></i>
+                                <span>Asking about</span>
                                 <span id="chat-repo-name" class="repo-name"></span>
-                                <span>?</span>
                             </div>
                         </div>
 
                         <!-- Chat Input -->
                         <form id="chat-form" class="chat-form">
                             <div class="chat-input-group">
-                                <input 
-                                    type="text" 
-                                    id="chat-input" 
+                                <input
+                                    type="text"
+                                    id="chat-input"
                                     placeholder="Ask a question about the code..."
                                     class="chat-input"
                                     disabled
+                                    autocomplete="off"
                                 >
-                                <button type="submit" class="btn btn-primary" id="chat-submit" disabled>
+                                <button type="submit" class="btn btn-primary btn-icon" id="chat-submit" disabled aria-label="Send">
                                     <i data-lucide="send" class="btn-icon"></i>
                                     <i data-lucide="loader-2" class="btn-spinner hidden"></i>
                                 </button>
                             </div>
                         </form>
                     </div>
-
-                    
                 </div>
             </section>
         </main>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.js"></script>
-    <script src="app.js?v=5"></script>
+    <script src="app.js"></script>
 </body>
 </html>
