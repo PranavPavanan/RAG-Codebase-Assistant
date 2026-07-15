@@ -900,6 +900,18 @@ Question: {query}<|end|>
 Question: {query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 
 """
+        elif prompt_format == "chatml":
+            # ChatML format (Qwen, etc.)
+            prompt = f"""<|im_start|>system
+{system_prompt}
+
+{instructions}<|im_end|>
+<|im_start|>user
+{code_context}
+
+Question: {query}<|im_end|>
+<|im_start|>assistant
+"""
         else:
             # Default Llama 2 / CodeLlama format
             prompt = f"""<s>[INST] <<SYS>>

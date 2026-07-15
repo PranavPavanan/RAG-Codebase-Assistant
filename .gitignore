@@ -88,6 +88,5 @@ backend/indices/
 backend/storage/
 
 # Model files
-models/
+backend/models/
 *.gguf
-**/models/

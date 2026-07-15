@@ -30,7 +30,7 @@ An AI-powered tool for querying and understanding GitHub repository code using R
 
 ## Prerequisites 📋
 
-- **Python 3.9+** (tested with Python 3.13)
+- **Python 3.10 to 3.12** (Note: Python 3.13+ or 3.14 may cause compilation errors for ML dependencies)
 - **Node.js 18+** (for frontend)
 - **Git** (for repository cloning)
 - **8GB+ RAM** (16GB recommended for LLM inference)
@@ -57,30 +57,33 @@ git checkout -b feature/your-feature-name
 ### 2. Backend Setup
 
 ```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
+# First, create virtual environment in the project root
+python -m venv .venv
 
 # Activate virtual environment
 # Windows:
-venv\Scripts\activate
+.\.venv\Scripts\activate
 # Mac/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
+# Note for Windows users: If `llama-cpp-python` fails to build due to missing C++ tools, install its pre-compiled wheel using:
+# pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+# Move to backend directory to run the server
+cd backend
 
 # Create .env file (optional)
 copy .env.example .env   # Windows (PowerShell/CMD)
 # cp .env.example .env   # Mac/Linux
 # Edit .env and add your GitHub token if you have one
 
-# Download CodeLlama model
-# Create models directory
+# Download the Qwen 2.5 Coder Model
+# VERY IMPORTANT: Create the models directory inside the `backend` folder!
 mkdir models
-# Download from: https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF
-# Place codellama-7b-instruct.Q4_K_M.gguf in models/
+# Download `qwen2.5-coder-3b-instruct-q4_k_m.gguf` from Hugging Face
+# Ensure you place the file precisely at: backend/models/qwen2.5-coder-3b-instruct-q4_k_m.gguf
 
 # Run backend
 uvicorn src.main:app --reload
@@ -140,7 +143,8 @@ Frontend will be available at **http://localhost:3000**
 GITHUB_TOKEN=your_github_token_here
 
 # Model Configuration
-MODEL_PATH=./models/codellama-7b-instruct.Q4_K_M.gguf
+MODEL_NAME=qwen2.5-coder-3b
+MODEL_PATH=./models/qwen2.5-coder-3b-instruct-q4_k_m.gguf
 
 # Indexing Configuration
 MAX_FILE_SIZE=1048576  # 1MB in bytes
@@ -290,8 +294,8 @@ coding-assistant/
 ### Backend Issues
 
 **Model not loading:**
-- Ensure the model file is in `backend/models/`
-- Check the file name matches `MODEL_PATH` in .env
+- Ensure the model file is strictly in `backend/models/` (NOT `backend/src/models/` or root `models/`)
+- Check the file name matches `MODEL_NAME` configuration in .env
 - Verify you have enough RAM (8GB minimum)
 
 **GitHub API rate limit:**
